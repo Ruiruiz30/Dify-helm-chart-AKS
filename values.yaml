@@ -1,3 +1,46 @@
+# Dify Helm Chart 配置文件
+# 本文件包含所有可配置的选项，用于自定义 Dify 在 Kubernetes 中的部署
+#
+# 配置说明：
+# 1. 全局配置 (global): 影响整个部署的配置项
+#    - host: 访问域名或 IP 地址
+#    - port: 服务端口
+#    - enableTLS: 是否启用 TLS
+#    - image: 镜像配置
+#    - edition: 部署版本
+#    - storageType: 存储类型
+#
+# 2. 组件配置: 各个组件的独立配置
+#    - frontend: 前端服务配置
+#    - api: API 服务配置
+#    - worker: 工作节点配置
+#    - postgresql: 数据库配置
+#    - redis: 缓存配置
+#    - minio: 对象存储配置
+#    - vector-db: 向量数据库配置
+#
+# 安全建议：
+# 1. 生产环境建议启用 TLS
+# 2. 使用 Kubernetes Secrets 管理敏感信息
+# 3. 配置适当的资源限制和请求
+# 4. 启用网络策略
+#
+# 高可用建议：
+# 1. 配置多个副本
+# 2. 使用 Pod 反亲和性
+# 3. 配置适当的资源限制
+# 4. 使用持久化存储
+#
+# 存储建议：
+# 1. 生产环境建议使用外部存储服务
+# 2. 配置适当的存储类
+# 3. 设置存储大小限制
+#
+# 向量数据库建议：
+# 1. 根据需求选择合适的向量数据库
+# 2. 配置适当的资源限制
+# 3. 考虑使用托管服务
+
 # Default values for dify.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
@@ -12,8 +55,21 @@ nameOverride: ""
 fullnameOverride: ""
 
 global:
+  # 主机配置
+  # 支持两种配置方式：
+  # 1. IP 地址：适用于内网访问，如 "10.104.179.207"
+  # 2. 域名：适用于公网访问，如 "dify.your-domain.com"
+  # 注意：使用域名时需要确保 DNS 解析正确，并配置相应的 TLS 证书
   host: "10.104.179.207"  # 使用前端LoadBalancer IP作为主机名
+  
+  # 端口配置
+  # 通常不需要设置，使用默认端口
+  # 如需自定义端口，请确保与 LoadBalancer 配置一致
   port: ""  # 不需要设置端口
+  
+  # TLS 配置
+  # - false: 适用于内网访问或 HTTP 访问
+  # - true: 适用于公网访问，需要配置 TLS 证书
   enableTLS: false  # 内网访问不需要 TLS
   image:
     tag: "1.4.1"

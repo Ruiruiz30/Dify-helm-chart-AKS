@@ -1,3 +1,22 @@
+# Dify Helm Chart Definition File
+# This file defines the basic information and dependencies of the Helm Chart
+#
+# Version Information:
+# - version: Chart version number, following Semantic Versioning
+# - appVersion: Dify application version number
+#
+# Dependencies Description:
+# - redis: Used for caching and message queue
+# - postgresql: Main database
+# - minio: Object storage service
+# - weaviate: Vector database option
+# - qdrant: Vector database option
+#
+# Notes:
+# 1. Version numbers should follow Semantic Versioning
+# 2. Dependencies versions should be compatible with Dify version
+# 3. It's recommended to use stable versions of dependencies
+
 apiVersion: v2
 name: dify
 description: A Helm chart for Dify
@@ -5,27 +24,14 @@ description: A Helm chart for Dify
 home: https://github.com/langgenius/dify
 
 maintainers:
-  - name: douban
+  - name: Ruiruiz
+    email: ruriuiz@gmail.com
+    url: https://github.com/Ruiruiz30
 
-# A chart can be either an 'application' or a 'library' chart.
-#
-# Application charts are a collection of templates that can be packaged into versioned archives
-# to be deployed.
-#
-# Library charts provide useful utilities or functions for the chart developer. They're included as
-# a dependency of application charts to inject those utilities and functions into the rendering
-# pipeline. Library charts do not define any templates and therefore cannot be deployed.
 type: application
 
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.6.3
+version: 0.1.0
 
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-# It is recommended to use it with quotes.
 appVersion: "1.4.1"
 
 dependencies:

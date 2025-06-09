@@ -112,25 +112,19 @@ stages:
                 echo "等待 LoadBalancer IP 分配..."
                 for i in {1..30}; do
                   FRONTEND_IP=$(kubectl get svc $(helmReleaseName)-frontend -n $(namespace) -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-                  API_IP=$(kubectl get svc $(helmReleaseName)-api-svc -n $(namespace) -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-                  WEAVIATE_IP=$(kubectl get svc weaviate -n $(namespace) -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
                   
-                  if [ "$FRONTEND_IP" = "10.104.179.207" ] && [ "$API_IP" = "10.104.179.208" ] && [ "$WEAVIATE_IP" = "10.104.179.209" ]; then
-                    echo "所有服务的内部 LoadBalancer IP 已分配成功！"
+                  if [ "$FRONTEND_IP" = "10.104.179.207" ]; then
+                    echo "前端服务的内部 LoadBalancer IP 已分配成功！"
                     break
                   fi
                   echo "等待 LoadBalancer IP 分配... ($i/30)"
                   echo "  Frontend IP: $FRONTEND_IP (期望: 10.104.179.207)"
-                  echo "  API IP: $API_IP (期望: 10.104.179.208)"
-                  echo "  Weaviate IP: $WEAVIATE_IP (期望: 10.104.179.209)"
                   sleep 10
                 done
                 
                 echo "================================================"
                 echo "Dify 部署完成！"
                 echo "前端访问地址: http://10.104.179.207"
-                echo "API 访问地址: http://10.104.179.208:5001"
-                echo "Weaviate 访问地址: http://10.104.179.209"
                 echo "================================================"
                 
                 # 输出服务状态

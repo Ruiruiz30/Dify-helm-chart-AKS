@@ -8,8 +8,7 @@
 - 🔒 内置安全配置和密钥管理
 - 🔄 支持 CI/CD 自动化部署
 - 📦 包含所有必要的依赖组件（Redis、PostgreSQL、MinIO 等）
-- 🔍 支持多种向量数据库选项（Weaviate、Qdrant、Milvus）
-- 🌐 灵活的存储配置（支持 S3、Google Cloud Storage 等）
+- 🔍 支持多种向量数据库选项（Weaviate、Qdrant）
 
 ## 系统架构
 
@@ -18,10 +17,10 @@
 - **Frontend**: Dify 的 Web 界面
 - **API Server**: 后端 API 服务
 - **Worker**: 异步任务处理服务
-- **PostgreSQL**: 主数据库
-- **Redis**: 缓存和消息队列
-- **MinIO**: 对象存储服务
-- **Vector Database**: 向量数据库（支持 Weaviate/Qdrant/Milvus）
+- **PostgreSQL**: 主数据库 (v12.1.6)
+- **Redis**: 缓存和消息队列 (v18.1.2)
+- **MinIO**: 对象存储服务 (v12.8.7)
+- **Vector Database**: 向量数据库（支持 Weaviate v16.3.0 或 Qdrant v0.7.0）
 
 ## 快速开始
 
@@ -38,12 +37,18 @@
 
 ```yaml
 global:
-  host: "your-dify-domain.com"
-  enableTLS: true  # 生产环境建议启用 TLS
-
+  # 使用 LoadBalancer IP 作为主机名（内网访问）
+  host: "10.104.179.207"
+  port: ""  # 不需要设置端口
+  enableTLS: false  # 内网访问不需要 TLS
+  
   image:
-    tag: "0.6.3"  # 使用最新的稳定版本
+    tag: "1.4.1"  # 当前支持的 Dify 版本
+  
+  edition: "SELF_HOSTED"
+  storageType: "s3"  # 使用 S3 存储
 
+  # 额外的环境变量配置
   extraBackendEnvs:
   - name: SECRET_KEY
     valueFrom:
@@ -51,40 +56,65 @@ global:
         name: dify-secrets
         key: SECRET_KEY
   - name: VECTOR_STORE
-    value: "weaviate"  # 或 "qdrant" 或 "milvus"
+    value: "weaviate"  # 或 "qdrant"
 
-ingress:
+# 组件配置
+postgresql:
   enabled: true
-  className: "nginx"
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+  # PostgreSQL 配置...
 
-# 存储配置
+redis:
+  enabled: true
+  # Redis 配置...
+
 minio:
-  embedded: false  # 生产环境建议使用外部存储
+  enabled: true
+  # MinIO 配置...
+
+weaviate:
+  enabled: true
+  # Weaviate 配置...
+
+qdrant:
+  enabled: false
+  # Qdrant 配置...
 ```
 
-2. 使用 Helm 安装：
+2. 推送 Helm Chart 到 Azure DevOps 仓库并执行 Pipeline：
 
 ```bash
-# 添加 Helm 仓库
-helm repo add dify-helm https://your-helm-repo-url
+# 将 Helm Chart 推送到 Azure DevOps 仓库
+git add .
+git commit -m "feat: update Dify Helm Chart configuration"
+git push origin main
 
-# 安装/更新
-helm upgrade dify dify-helm/dify \
-  -f values.yaml \
-  --install \
-  --namespace dify \
-  --create-namespace
+# Pipeline 将自动执行以下步骤：
+# 1. 创建 Kubernetes 命名空间
+# 2. 生成并创建必要的密钥
+# 3. 更新 Helm 依赖
+# 4. 部署 Dify 应用
+# 5. 验证部署状态
+# 6. 等待服务就绪
 ```
 
-3. 执行数据库迁移：
-
-```bash
-kubectl exec -it $(kubectl get pod -l app.kubernetes.io/component=api -o jsonpath='{.items[0].metadata.name}') \
-  -n dify -- flask db upgrade
+Pipeline 执行完成后，您将看到类似以下的输出：
 ```
+================================================
+Dify 部署完成！
+前端访问地址: http://10.104.179.207
+================================================
+```
+
+## 版本信息
+
+- Chart 版本：0.1.0
+- Dify 应用版本：1.4.1
+- 依赖组件版本：
+  - Redis: 18.1.2
+  - PostgreSQL: 12.1.6
+  - MinIO: 12.8.7
+  - Weaviate: 16.3.0
+  - Qdrant: 0.7.0
 
 ## CI/CD 配置
 
@@ -113,31 +143,31 @@ helmReleaseName: 'dify'
 
 ### 1. 安全配置
 
-- 使用 Azure Key Vault 管理敏感信息
-- 启用 TLS 加密
-- 配置网络策略
-- 使用 Azure AD 集成进行身份验证
+- 使用 Kubernetes Secrets 管理敏感信息
+- 配置适当的资源限制和请求
+- 启用网络策略
+- 定期更新密钥和证书
 
 ### 2. 存储配置
 
-推荐使用 Azure 托管服务：
-
-- Azure Database for PostgreSQL
-- Azure Cache for Redis
-- Azure Blob Storage 或 Azure Files
+- 使用外部存储服务（如 Azure Blob Storage）
+- 配置适当的存储类
+- 设置存储大小限制
+- 定期备份数据
 
 ### 3. 高可用配置
 
-- 配置 Pod 反亲和性
-- 使用 Azure 托管磁盘
+- 配置多个副本
+- 使用 Pod 反亲和性
 - 配置适当的资源限制
-- 设置自动扩缩容
+- 使用持久化存储
 
 ### 4. 监控和日志
 
-- 集成 Azure Monitor
-- 配置 Prometheus 和 Grafana
-- 设置日志收集和分析
+- 配置适当的日志级别
+- 设置资源使用告警
+- 监控服务健康状态
+- 定期检查系统日志
 
 ## 维护和升级
 
