@@ -1,0 +1,153 @@
+trigger:
+  - dify-helm
+
+resources:
+  - repo: self
+
+variables:
+  # Azure资源相关变量
+  azureSubscriptionEndpoint: ''
+  azureResourceGroup: ''
+  kubernetesCluster: ''
+  
+  # Kubernetes相关变量
+  namespace: 'dify'
+  helmReleaseName: 'dify'
+  helmChartPath: '$(Build.SourcesDirectory)/helm-chart'
+  
+  # 构建环境相关变量
+  vmImageName: 'ubuntu-latest'
+  buildPoolName: 'LF local aks pool'
+
+stages:
+  - stage: Deploy
+    displayName: 'Deploy Dify with Helm'
+    jobs:
+      - job: DeployHelm
+        displayName: 'Deploy Helm Chart to AKS'
+        pool:
+          name: $(buildPoolName)
+          vmImage: $(vmImageName)
+        steps:
+          # 步骤1: 安装Helm
+          - task: HelmInstaller@1
+            inputs:
+              helmVersionToInstall: 'latest'
+            displayName: 'Install Helm'
+          
+          # 步骤2: 创建命名空间
+          - task: Kubernetes@1
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
+              azureResourceGroup: $(azureResourceGroup)
+              kubernetesCluster: $(kubernetesCluster)
+              command: 'apply'
+              arguments: '-f $(Build.SourcesDirectory)/helm-chart/namespace.yaml'
+            displayName: 'Create Namespace if not exists'
+          
+          # 步骤3: 创建必要的密钥
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: |
+                # 生成随机密钥
+                SECRET_KEY=$(openssl rand -hex 32)
+                MINIO_ROOT_USER="minioadmin"
+                MINIO_ROOT_PASSWORD="minioadmin"
+                REDIS_PASSWORD="difyai123456"
+                POSTGRES_PASSWORD="difyai123456"
+                
+                # 创建或更新密钥
+                kubectl create secret generic dify-secrets \
+                  --from-literal=SECRET_KEY="$SECRET_KEY" \
+                  --from-literal=MINIO_ROOT_USER="$MINIO_ROOT_USER" \
+                  --from-literal=MINIO_ROOT_PASSWORD="$MINIO_ROOT_PASSWORD" \
+                  --from-literal=REDIS_PASSWORD="$REDIS_PASSWORD" \
+                  --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+                  -n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+            displayName: 'Create Kubernetes Secrets'
+          
+          # 步骤4: Helm依赖更新
+          - task: HelmDeploy@0
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
+              azureResourceGroup: $(azureResourceGroup)
+              kubernetesCluster: $(kubernetesCluster)
+              namespace: $(namespace)
+              command: 'dependency'
+              arguments: 'update $(helmChartPath)'
+            displayName: 'Update Helm Dependencies'
+          
+          # 步骤5: Helm部署
+          - task: HelmDeploy@0
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
+              azureResourceGroup: $(azureResourceGroup)
+              kubernetesCluster: $(kubernetesCluster)
+              namespace: $(namespace)
+              command: 'upgrade'
+              chartType: 'FilePath'
+              chartPath: $(helmChartPath)
+              releaseName: $(helmReleaseName)
+              valueFile: '$(helmChartPath)/values.yaml'
+              install: true
+              waitForExecution: true
+              arguments: '--timeout 20m0s --debug --atomic'
+            displayName: 'Deploy Dify with Helm'
+          
+          # 步骤6: 等待服务就绪并获取访问信息
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "等待服务就绪..."
+                kubectl wait --for=condition=available --timeout=300s deployment/$(helmReleaseName)-frontend -n $(namespace)
+                kubectl wait --for=condition=available --timeout=300s deployment/$(helmReleaseName)-api -n $(namespace)
+                kubectl wait --for=condition=available --timeout=300s deployment/$(helmReleaseName)-worker -n $(namespace)
+                
+                # 等待 LoadBalancer IP 分配
+                echo "等待 LoadBalancer IP 分配..."
+                for i in {1..30}; do
+                  FRONTEND_IP=$(kubectl get svc $(helmReleaseName)-frontend -n $(namespace) -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+                  API_IP=$(kubectl get svc $(helmReleaseName)-api-svc -n $(namespace) -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+                  WEAVIATE_IP=$(kubectl get svc weaviate -n $(namespace) -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+                  
+                  if [ "$FRONTEND_IP" = "10.104.179.207" ] && [ "$API_IP" = "10.104.179.208" ] && [ "$WEAVIATE_IP" = "10.104.179.209" ]; then
+                    echo "所有服务的内部 LoadBalancer IP 已分配成功！"
+                    break
+                  fi
+                  echo "等待 LoadBalancer IP 分配... ($i/30)"
+                  echo "  Frontend IP: $FRONTEND_IP (期望: 10.104.179.207)"
+                  echo "  API IP: $API_IP (期望: 10.104.179.208)"
+                  echo "  Weaviate IP: $WEAVIATE_IP (期望: 10.104.179.209)"
+                  sleep 10
+                done
+                
+                echo "================================================"
+                echo "Dify 部署完成！"
+                echo "前端访问地址: http://10.104.179.207"
+                echo "API 访问地址: http://10.104.179.208:5001"
+                echo "Weaviate 访问地址: http://10.104.179.209"
+                echo "================================================"
+                
+                # 输出服务状态
+                echo "服务状态："
+                kubectl get pods -n $(namespace)
+                echo "----------------------------------------"
+                kubectl get svc -n $(namespace)
+            displayName: 'Wait for Services and Get Access Info'
+          
+          # 步骤7: 验证部署
+          - task: Kubernetes@1
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscriptionEndpoint: $(azureSubscriptionEndpoint)
+              azureResourceGroup: $(azureResourceGroup)
+              kubernetesCluster: $(kubernetesCluster)
+              namespace: $(namespace)
+              command: 'get'
+              arguments: 'pods,services,deployments'
+            displayName: 'Verify Kubernetes Deployment'
